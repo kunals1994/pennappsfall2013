@@ -2,13 +2,22 @@ from scheduler.tasks import msg
 from datetime import datetime, timedelta
 from django.http import HttpResponse, HttpRequest
 from pytz import timezone
+from twilio.rest import TwilioRestClient
 
 import json
 import urllib2
+import urllib
 
 def process (request):
 
-	params = request.POST
+	params = 0
+
+	if(request.method == "GET"):
+		params = request.GET
+	elif (request.method == "POST"):
+		params = request.POST
+
+
 	outgoingPhone = params.__getitem__("sendTo")
 	pid = params.__getitem__("pid")
 
@@ -26,20 +35,32 @@ def process (request):
 
 	for event in events:
 		if (lastEvent == ""):
-			urllib2.urlopen("/scheduleMsg")
+			nextStart = event["start"]["dateTime"][:-5]
+
+			if(nextStart [-1] == "-"):
+				nextStart = nextStart[:-1]
+			nextStart = datetime.strptime(nextStart, '%Y-%m-%dT%H:%M:%S')
+
+
+			timeToSend = datetime (nextStart.year, nextStart.month, nextStart.day, nextStart.hour-2, nextStart.minute, 0, 1, timezone('America/New_York'))
+
+			msg.apply_async((outgoingPhone, "Your first appointment of the day is in less than an hour"), eta = timeToSend)			
 
 			lastEvent = event
 			continue
 
 		lastEnd = lastEvent["end"]["dateTime"][:-5]
-		nextStart = lastEvent["end"]["dateTime"][:-5]
+		nextStart = event["start"]["dateTime"][:-5]
 
 		if(lastEnd [-1] == "-"):
 			lastEnd = lastEnd[:-1]
 		if(nextStart [-1] == "-"):
 			nextStart = nextStart[:-1]
 
-		maxTravelTime = datetime.strptime(lastEnd, '%Y-%m-%dT%H:%M:%S') - datetime.strptime(nextStart, '%Y-%m-%dT%H:%M:%S')
+		lastEnd = datetime.strptime(lastEnd, '%Y-%m-%dT%H:%M:%S')
+		nextStart = datetime.strptime(nextStart, '%Y-%m-%dT%H:%M:%S')
+
+		maxTravelTime = nextStart - lastEnd
 
 		maxTravelTime = maxTravelTime.total_seconds()
 
@@ -56,20 +77,51 @@ def process (request):
 			time += leg["duration"]["value"]
 
 		if(maxTravelTime <  time):
-			print ("Send SMS to user")
+			print ("Notifying user of conflict")
+			account_sid = "AC03701871ae569b1ec0facf7b8ad41e19"
+			auth_token  = "9908bfe073c98b4ac3fc0afce32ff77f"
+			client = TwilioRestClient(account_sid, auth_token)
+			
+			message = client.sms.messages.create(body="You will not have enough time to reach "+event["summary"]+" at "+event["location"]+".",
+				to=outgoingPhone,
+				from_="+12024996660")
+
+
 		else:
-			print ("Schedule SMS to user")
+			nextStart = nextStart - timedelta(seconds = time + 600)
+
+			timeToSend = datetime (nextStart.year, nextStart.month, nextStart.day, nextStart.hour-2, nextStart.minute, 0, 1, timezone('America/New_York'))
+			print ("Creating reminder for "+str(timeToSend))
+			msg.apply_async((outgoingPhone, "You must leave within 10 minutes to make "+event["summary"]+" at "+event["location"]+"."), eta = timeToSend)
+
 
 		if(maxTravelTime - time > 45 * 60):
-			if(nextStart.hour <11 and (lastEnd.hour<10 or lastEnd.minutes <= 30) and not scheduledCoffee):
-				print ("Schedule coffee")
+			if(nextStart.hour <11 and (lastEnd.hour<10 or lastEnd.minute <= 30) and not scheduledCoffee):
+
+				account_sid = "AC03701871ae569b1ec0facf7b8ad41e19"
+				auth_token  = "9908bfe073c98b4ac3fc0afce32ff77f"
+				client = TwilioRestClient(account_sid, auth_token)
+			
+				message = client.sms.messages.create(body="You have time for coffee at " + str(lastEnd) + ".",
+					to=outgoingPhone,
+					from_="+12024996660")
+
+ 
+				
 				scheduledCoffee = True
 			elif (not scheduledLunch):
-				print ("Schedule lunch")
+				account_sid = "AC03701871ae569b1ec0facf7b8ad41e19"
+				auth_token  = "9908bfe073c98b4ac3fc0afce32ff77f"
+				client = TwilioRestClient(account_sid, auth_token)
+			
+				message = client.sms.messages.create(body="You have time for coffee at " +str(lastEnd) +". Making reservations",
+					to=outgoingPhone,
+					from_="+12024996660")
 				scheduledLunch = True
 
 
 		lastEvent = event
+	return HttpResponse("Success")
 
 
 def scheduleMsg(request):
@@ -93,12 +145,11 @@ def scheduleMsg(request):
 
 	timeToSend = datetime (int(param.__getitem__("year")), int(param.__getitem__("month")), day, hour, int(param.__getitem__("minute")), 0, 1, timezone('America/New_York')) 
 
-	print (timeToSend)
-
 
 	recepient = param.__getitem__("sendto")
 	content = param.__getitem__("body")
 
+	print ("Scheduled reminder for "+ timeToSend)
 	msg.apply_async((recepient, content), eta = timeToSend)
 
 
