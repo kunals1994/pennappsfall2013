@@ -5,6 +5,7 @@ from django.conf.urls import patterns, include, url
 # admin.autodiscover()
 
 urlpatterns = patterns('',
+	url(r'^schedulemsg/', include('scheduler.urls'))
     # Examples:
     # url(r'^$', 'smsScheduler.views.home', name='home'),
     # url(r'^smsScheduler/', include('smsScheduler.foo.urls')),
