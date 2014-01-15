@@ -22,13 +22,14 @@ import urllib2
 import datetime
 from datetime import timedelta
 
-from google.appengine.api.taskqueue import Task
+from google.appengine.api import taskqueue
+
 
 account_sid = "AC03701871ae569b1ec0facf7b8ad41e19"
 auth_token = "9908bfe073c98b4ac3fc0afce32ff77f"
 
 class MessageHandler(webapp2.RequestHandler):
-	def get(number, message):
+	def get(self):
 		number = self.request.get("number")
 		message = self.request.get("message")
 
@@ -72,12 +73,17 @@ class SchedulingHandler(webapp2.RequestHandler):
 
 		offset = timedelta(minutes = 30)
 
-		message_out = "Don't forget about "+title+" on "+time.strftime("%m/%d/%Y at %H:%M:%S")+"!"
+		message_out = title+" on "+time.strftime("%m/%d at %H:%M")
 		time -= offset
 
-		cd = time - datetime.datetime.now() 
+		cd = time - datetime.datetime.now()
 
-		task = Task(url = "/cartographr/sms?number="+send_to+"&message="+message_out, method = "GET", countdown = cd.total_seconds())
+		cd = cd.total_seconds()
+
+		if (cd < 0):
+			cd = 1
+
+		taskqueue.add(url = "/cartographr/sms", method = "GET", countdown = cd, params = {"number": send_to, "message": message_out})
 
 		self.response.write('<script>window.location.replace ("http://cartographr.kshar.me");window.alert("'+
 			"You'll get a text for " +title+ " half an hour before."
@@ -86,5 +92,5 @@ class SchedulingHandler(webapp2.RequestHandler):
 
 
 app = webapp2.WSGIApplication([
-    ('/cartographr/schedule', SchedulingHandler), ('cartographr/sms', MessageHandler)
+    ('/cartographr/schedule', SchedulingHandler), ('/cartographr/sms', MessageHandler)
 ], debug=True)
