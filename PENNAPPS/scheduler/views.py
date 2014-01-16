@@ -98,8 +98,6 @@ def process (request):
 		if(maxTravelTime - time > 45 * 60):
 			if(nextStart.hour <11 and (lastEnd.hour<10 or lastEnd.minute <= 30) and not scheduledCoffee):
 
-				account_sid = "AC03701871ae569b1ec0facf7b8ad41e19"
-				auth_token  = "9908bfe073c98b4ac3fc0afce32ff77f"
 				client = TwilioRestClient(account_sid, auth_token)
 			
 				message = client.sms.messages.create(body="You have time for coffee at " + str(lastEnd) + ".",
@@ -110,9 +108,6 @@ def process (request):
 				
 				scheduledCoffee = True
 			elif (not scheduledLunch):
-				account_sid = "AC03701871ae569b1ec0facf7b8ad41e19"
-				auth_token  = "9908bfe073c98b4ac3fc0afce32ff77f"
-				client = TwilioRestClient(account_sid, auth_token)
 			
 				message = client.sms.messages.create(body="You have time for coffee at " +str(lastEnd) +". Making reservations",
 					to=outgoingPhone,
